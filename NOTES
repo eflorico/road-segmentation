@@ -1,0 +1,36 @@
+Input pipeline:
+Distribution of labels is corrected (in the reference, the maximum seems to be .96, not 1)
+16x16 patches are cropped out at a stride of 8
+At road borders (patches that contain both road and non-road pixels), the stride is reduced to 2 (see below)
+Since the input is larger than the patch (96x96 for convnet, 128x128 for unet), the input might exceed the training image. The training data are therefore padded with a reflection of the image (inspired by the U-net paper)
+The images are randomly rotated and flipped. Brightness and contrast are also changed at random; also, small channel shifts are introduced.
+The samples are weighted by the inverse of the presence of the classes in the training data. This is determined by sampling from the input pipeline.
+
+Prediction:
+I played around with the threshold that maximizes the F1 score on the validation set and found 0.44 to work better in some cases than 0.5.
+
+Convnet architecture:
+See models.py
+Since information about the center patch should be considered particularly, this bypasses the last two convolutions in a kind of residual connection. Otherwise, the center would only be represented by 0.5x0.5 pixels after the last convolution. 
+Best result: 0.92474
+
+U-net:
+Inspired by https://arxiv.org/abs/1505.04597
+Best result: 0.91809
+
+Two-stream model:
+Surrounding patch of 128x128 is downsampled to 64x64 by average pooling and passed through convnet.
+Center patch of 24x24 is passed through a separate convnet.
+Both are merged in the fully connected layer.
+Did not work well in practice.
+Best result: 0.90875
+
+Finetuning Inception v3:
+Did not work well, likely because pretrained Inception considers the whole image and just the center part for classification
+
+Failure modes:
+There are many misclassifications along the borders of roads, especially along diagonal roads. This is likely because the difference between 40% road and 60% road is not that evident. In order to combat this, I made the labels non-binary (0.4 for 40% road). This is why I tried the U-net architecture - I figured a per-pixel classification could deal better with these situations.
+
+There are a few images of highways where the networks fail across the board. I suppose this is because car parks are not roads and hard to distinguish from highways. Notably, parts of the highway with cars are classified correctly. I don't really have any idea how to mitigate this.
+
+The pictures are not necessarily all taken at a 90 degree angle. Therefore, sometimes, roads are overlapped by large adjacent buildings. This makes prediction very hard and is also possibly confusing during trianing.
